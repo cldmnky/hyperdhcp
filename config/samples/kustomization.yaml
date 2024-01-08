@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- hyperdhcp_v1beta1_server.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
