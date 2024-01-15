@@ -9,7 +9,6 @@ import (
 	pl_nbp "github.com/coredhcp/coredhcp/plugins/nbp"
 	pl_netmask "github.com/coredhcp/coredhcp/plugins/netmask"
 	pl_prefix "github.com/coredhcp/coredhcp/plugins/prefix"
-	pl_range "github.com/coredhcp/coredhcp/plugins/range"
 	pl_router "github.com/coredhcp/coredhcp/plugins/router"
 	pl_searchdomains "github.com/coredhcp/coredhcp/plugins/searchdomains"
 	pl_serverid "github.com/coredhcp/coredhcp/plugins/serverid"
@@ -18,6 +17,7 @@ import (
 	dhcpserver "github.com/coredhcp/coredhcp/server"
 
 	pl_kubevirt "github.com/cldmnky/hyperdhcp/internal/dhcp/plugins/kubevirt"
+	pl_leasedb "github.com/cldmnky/hyperdhcp/internal/dhcp/plugins/leasedb"
 )
 
 var plugins = []*dhcpplugins.Plugin{
@@ -26,13 +26,13 @@ var plugins = []*dhcpplugins.Plugin{
 	&pl_netmask.Plugin,
 	&pl_nbp.Plugin,
 	&pl_prefix.Plugin,
-	&pl_range.Plugin,
 	&pl_router.Plugin,
 	&pl_serverid.Plugin,
 	&pl_searchdomains.Plugin,
 	&pl_sleep.Plugin,
 	&pl_staticroute.Plugin,
 	&pl_kubevirt.Plugin,
+	&pl_leasedb.Plugin, // leasedb masquerades as range
 }
 
 func Run(config *Config) error {

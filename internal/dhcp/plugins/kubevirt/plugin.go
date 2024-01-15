@@ -32,7 +32,7 @@ type KubevirtInstance struct {
 
 type KubevirtState struct {
 	sync.Mutex
-	Client    *versioned.Clientset
+	Client    versioned.Interface
 	Instances []KubevirtInstance
 }
 
@@ -63,22 +63,6 @@ func setupKubevirt(args ...string) (handler.Handler4, error) {
 		log.WithError(err).Error("failed to create kubevirt client")
 		return nil, err
 	}
-	client := versioned.NewForConfigOrDie(cfg)
-	kv, err := client.KubevirtV1().VirtualMachineInstances(v1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		log.WithError(err).Error("failed to list virtual machine instances")
-		return nil, err
-	}
-	for _, v := range kv.Items {
-		log.WithField("name", v.Name).Info("found virtual machine instance")
-		k.addKubevirtInstance(&KubevirtInstance{
-			Name:       v.Name,
-			Namespace:  v.Namespace,
-			Interfaces: v.Status.Interfaces,
-		})
-	}
-	log.WithField("instances", k.Instances).Info("instances")
-
 	return k.kubevirtHandler4, nil
 }
 
@@ -104,6 +88,7 @@ func (k *KubevirtState) kubevirtHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCP
 
 func (k *KubevirtState) getKubevirtInstanceForMAC(mac string) *KubevirtInstance {
 	log.WithField("mac", mac).Info("looking for machine instance")
+	log.WithField("instances", len(k.Instances)).Info("number of instances")
 	// instances
 	log.WithField("instances", k.Instances).Info("instances")
 	for _, i := range k.Instances {
@@ -129,6 +114,7 @@ func (k *KubevirtState) addKubevirtInstance(i *KubevirtInstance) {
 		}
 	}
 	k.Instances = append(k.Instances, *i)
+	log.WithField("instances", len(k.Instances)).Info("number of instances")
 }
 
 // refreshKubevirtInstances
