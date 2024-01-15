@@ -1,0 +1,66 @@
+# DHCPv4 configuration
+server4:
+    # listen is an optional section to specify how the server binds to an
+    # interface or address.
+    # If unset, the server will listen on the broadcast address on all
+    # interfaces, equivalent to:
+    ## listen:
+        ## - "0.0.0.0"
+
+    # In general, listen takes a list of addresses, with the general syntax
+    # "address%interface:port", where each part is optional.
+    # * Omitting the address results in the wildcard address being used
+    # * Omitting the interface skips binding the listener to a specific interface
+    #   and listens on all interfaces instead
+    # * Omitting the port uses the default port for DHCPv4 (67)
+    #
+    # For example:
+    # - ":44480" Listens on a specific port.
+    # - "%eno1" Listens on the wildcard address on one interface.
+    # - "192.0.2.1%eno1:44480" with all parts
+
+    # plugins is a mandatory section, which defines how requests are handled.
+    # It is a list of maps, matching plugin names to their arguments.
+    # The order is meaningful, as incoming requests are handled by each plugin
+    # in turn. There is no default value for a plugin configuration, and a
+    # plugin that is not mentioned will not be loaded at all
+    #
+    # The following contains examples of the most common, builtin plugins.
+    # External plugins should document their arguments in their own
+    # documentations or readmes
+    plugins:
+        - kubevirt: /Users/mbengtss/.kube/config
+        # server_id advertises a DHCP Server Identifier, to help resolve
+        # situations where there are multiple DHCP servers on the network
+        # - server_id: <IP address>
+        # The IP address should be one address where this server is reachable
+        - server_id: 10.10.10.1
+
+        # dns advertises DNS resolvers usable by the clients on this network
+        # - dns: <IP address> <...IP addresses>
+        - dns: 8.8.8.8 8.8.4.4
+
+        # router is mandatory, and advertises the address of the default router
+        # for this network
+        # - router: <IP address>
+        - router: 192.168.1.1
+
+        # netmask advertises the network mask for the IPs assigned through this
+        # server
+        # - netmask: <network mask>
+        - netmask: 255.255.255.0
+
+        # range allocates leases within a range of IPs
+        # - range: <lease file> <start IP> <end IP> <lease duration>
+        # * the lease file is an initially empty file where the leases that are
+        # allocated to clients will be stored across server restarts
+        # * lease duration can be given in any format understood by go's
+        # "ParseDuration": https://golang.org/pkg/time/#ParseDuration
+        - range: leases.txt 10.10.10.100 10.10.10.200 60s
+
+        # staticroute advertises additional routes the client should install in
+        # its routing table as described in RFC3442
+        # - staticroute: <destination>,<gateway> [<destination>,<gateway> ...]
+        # where destination should be in CIDR notation and gateway should be
+        # the IP address of the router through which the destination is reachable
+        # - staticroute: 10.20.20.0/24,10.10.10.1

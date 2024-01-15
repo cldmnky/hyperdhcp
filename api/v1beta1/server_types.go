@@ -20,16 +20,55 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // ServerSpec defines the desired state of Server
 type ServerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	DHCPConfig        DHCPConfigSpec        `json:"dhcpConfig,omitempty"`
+	NetworkAttachment NetworkAttachmentSpec `json:"networkAttachment,omitempty"`
+}
 
-	// Foo is an example field of Server. Edit server_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+type NetworkAttachmentSpec struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name,omitempty"`
+	// +kubebuilder:validation:Required
+	NameSpace string `json:"namespace,omitempty"`
+	// +kubebuilder:validation:Optional
+	IPs []string `json:"ips,omitempty"`
+}
+
+func (s *NetworkAttachmentSpec) GetIPs() string {
+	// return a string json array of the IPs as ["xx", "yy", "zz"]
+	ret := "["
+	for i, ip := range s.IPs {
+		if i > 0 {
+			ret += ","
+		}
+		ret += "\"" + ip + "\""
+	}
+	ret += "]"
+	return ret
+}
+
+type DHCPConfigSpec struct {
+	Listen       string        `json:"listen,omitempty"`
+	ServerID     string        `json:"serverID,omitempty"`
+	DNS          []string      `json:"dns,omitempty"`
+	Router       string        `json:"router,omitempty"`
+	SubnetMask   string        `json:"subnetMask,omitempty"`
+	StaticRoutes []string      `json:"staticRoutes,omitempty"`
+	Range        DHCPRangeSpec `json:"range,omitempty"`
+}
+
+type DHCPRangeSpec struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern="((^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$)|(^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$))"
+	Start string `json:"start,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern="((^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$)|(^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$))"
+	End string `json:"end,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(s|m|h))+$"
+	LeaseTime *metav1.Duration `json:"leaseTime,omitempty"`
 }
 
 // ServerStatus defines the observed state of Server
