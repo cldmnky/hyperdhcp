@@ -137,3 +137,148 @@ func TestDuplicateRec(t *testing.T) {
 
 	assert.Equal(t, mapRec, parsedRec, "Loaded records differ from what's in the DB")
 }
+
+func TestLoadDB(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "in-memory database",
+			path:    ":memory:",
+			wantErr: false,
+		},
+		{
+			name:    "file database",
+			path:    "test.db",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := loadDB(tt.path)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, db)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, db)
+				if db != nil {
+					db.Close()
+				}
+			}
+		})
+	}
+}
+
+func TestLoadRecordsErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(*sql.DB) error
+		wantErr   bool
+	}{
+		{
+			name: "invalid MAC address",
+			setupFunc: func(db *sql.DB) error {
+				_, err := db.Exec("INSERT INTO leases4(mac, ip, expiry) VALUES ('invalid-mac', '10.0.0.1', 0)")
+				return err
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid IP address",
+			setupFunc: func(db *sql.DB) error {
+				_, err := db.Exec("INSERT INTO leases4(mac, ip, expiry) VALUES ('02:00:00:00:00:06', 'invalid-ip', 0)")
+				return err
+			},
+			wantErr: true,
+		},
+		{
+			name: "IPv6 address instead of IPv4",
+			setupFunc: func(db *sql.DB) error {
+				_, err := db.Exec("INSERT INTO leases4(mac, ip, expiry) VALUES ('02:00:00:00:00:07', '2001:db8::1', 0)")
+				return err
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := loadDB(":memory:")
+			assert.NoError(t, err)
+			defer db.Close()
+
+			if tt.setupFunc != nil {
+				err := tt.setupFunc(db)
+				assert.NoError(t, err)
+			}
+
+			_, err = loadRecords(db)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRegisterBackingDB(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		wantErr  bool
+	}{
+		{
+			name:     "valid in-memory database",
+			filename: ":memory:",
+			wantErr:  false,
+		},
+		{
+			name:     "valid file database",
+			filename: "test_register.db",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pl := &PluginState{}
+			err := pl.registerBackingDB(tt.filename)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, pl.leasedb)
+			}
+		})
+	}
+}
+
+func TestRegisterBackingDBSwapError(t *testing.T) {
+	pl := &PluginState{}
+	err := pl.registerBackingDB(":memory:")
+	assert.NoError(t, err)
+
+	// Try to swap out the database
+	err = pl.registerBackingDB(":memory:")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot swap out a lease database while running")
+}
+
+func TestSaveIPAddressErrors(t *testing.T) {
+	pl := &PluginState{}
+	err := pl.registerBackingDB(":memory:")
+	assert.NoError(t, err)
+
+	// Close the database to force an error
+	pl.leasedb.Close()
+
+	mac, _ := net.ParseMAC("02:00:00:00:00:08")
+	rec := &Record{IP: net.IPv4(10, 0, 0, 8), expires: 0}
+	err = pl.saveIPAddress(mac, rec)
+	assert.Error(t, err)
+}

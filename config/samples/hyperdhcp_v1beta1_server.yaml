@@ -9,3 +9,27 @@ metadata:
     app.kubernetes.io/created-by: hyperdhcp
   name: server-sample
 spec:
+  dhcpConfig:
+    # DHCP server identifier (typically the IP of the server)
+    serverID: "192.168.1.1"
+    # DNS servers to provide to clients
+    dns:
+      - "8.8.8.8"
+      - "8.8.4.4"
+    # Default gateway/router
+    router: "192.168.1.1"
+    # Subnet mask
+    subnetMask: "255.255.255.0"
+    # IP address range to lease
+    range:
+      start: "192.168.1.100"
+      end: "192.168.1.200"
+      leaseTime: "1h"
+  networkAttachment:
+    # Name of the Multus network attachment definition
+    name: "dhcp-net"
+    # Namespace where the network attachment definition exists
+    namespace: "default"
+    # IP addresses to bind the DHCP server to (one per interface)
+    ips:
+      - "192.168.1.1"

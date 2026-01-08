@@ -22,6 +22,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,6 +46,11 @@ type ServerReconciler struct {
 // +kubebuilder:rbac:groups=hyperdhcp.blahonga.me,resources=servers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=hyperdhcp.blahonga.me,resources=servers/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 func (r *ServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -73,6 +79,50 @@ func (r *ServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ServerReconciler) ensureDHCPDeployment(ctx context.Context, server *hyperdhcpv1beta1.Server) error {
 	log := log.FromContext(ctx)
 
+	// Ensure ConfigMap
+	configMap := newDHCPConfigMap(server)
+	if err := ctrl.SetControllerReference(server, configMap, r.Scheme); err != nil {
+		log.Error(err, "unable to set owner reference on ConfigMap")
+		return err
+	}
+	if _, err := CreateOrUpdateWithRetries(ctx, r.Client, configMap, func() error {
+		// Update ConfigMap data from desired state
+		desiredConfigMap := newDHCPConfigMap(server)
+		configMap.Data = desiredConfigMap.Data
+		configMap.Labels = desiredConfigMap.Labels
+		return ctrl.SetControllerReference(server, configMap, r.Scheme)
+	}); err != nil {
+		log.Error(err, "unable to ensure ConfigMap")
+		return err
+	}
+
+	// Ensure PVC
+	pvc := newDHCPPVC(server)
+	if err := ctrl.SetControllerReference(server, pvc, r.Scheme); err != nil {
+		log.Error(err, "unable to set owner reference on PVC")
+		return err
+	}
+	if _, err := CreateOrUpdateWithRetries(ctx, r.Client, pvc, func() error {
+		return ctrl.SetControllerReference(server, pvc, r.Scheme)
+	}); err != nil {
+		log.Error(err, "unable to ensure PVC")
+		return err
+	}
+
+	// Ensure ServiceAccount
+	sa := newDHCPServiceAccount(server)
+	if err := ctrl.SetControllerReference(server, sa, r.Scheme); err != nil {
+		log.Error(err, "unable to set owner reference on ServiceAccount")
+		return err
+	}
+	if _, err := CreateOrUpdateWithRetries(ctx, r.Client, sa, func() error {
+		return ctrl.SetControllerReference(server, sa, r.Scheme)
+	}); err != nil {
+		log.Error(err, "unable to ensure ServiceAccount")
+		return err
+	}
+
+	// Ensure Deployment
 	deployment := newDHCPDeployment(server)
 	if err := ctrl.SetControllerReference(server, deployment, r.Scheme); err != nil {
 		log.Error(err, "unable to set owner reference on DHCP deployment")
@@ -88,6 +138,93 @@ func (r *ServerReconciler) ensureDHCPDeployment(ctx context.Context, server *hyp
 	}
 
 	return nil
+}
+
+func newDHCPConfigMap(server *hyperdhcpv1beta1.Server) *corev1.ConfigMap {
+	// Convert DNS slice to comma-separated string
+	dns := ""
+	if len(server.Spec.DHCPConfig.DNS) > 0 {
+		dns = server.Spec.DHCPConfig.DNS[0]
+		for i := 1; i < len(server.Spec.DHCPConfig.DNS); i++ {
+			dns += "," + server.Spec.DHCPConfig.DNS[i]
+		}
+	}
+
+	// Format lease time
+	leaseTime := "1h"
+	if server.Spec.DHCPConfig.Range.LeaseTime != nil {
+		leaseTime = server.Spec.DHCPConfig.Range.LeaseTime.Duration.String()
+	}
+
+	config := fmt.Sprintf(`server:
+  address: %s
+  range: %s-%s
+dhcp:
+  router: %s
+  dns: %s
+  subnetMask: %s
+  leaseTime: %s
+  serverIdentifier: %s
+kubevirt:
+  enabled: true
+  namespace: default
+`, server.Spec.NetworkAttachment.GetIPs(),
+		server.Spec.DHCPConfig.Range.Start,
+		server.Spec.DHCPConfig.Range.End,
+		server.Spec.DHCPConfig.Router,
+		dns,
+		server.Spec.DHCPConfig.SubnetMask,
+		leaseTime,
+		server.Spec.DHCPConfig.ServerID)
+
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      server.Name,
+			Namespace: server.Namespace,
+			Labels: map[string]string{
+				"app": server.Name,
+			},
+		},
+		Data: map[string]string{
+			"hyperdhcp.yaml": config,
+		},
+	}
+}
+
+func newDHCPPVC(server *hyperdhcpv1beta1.Server) *corev1.PersistentVolumeClaim {
+	storageClassName := "longhorn"
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      server.Name,
+			Namespace: server.Namespace,
+			Labels: map[string]string{
+				"app": server.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClassName,
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("25Mi"),
+				},
+			},
+		},
+	}
+}
+
+func newDHCPServiceAccount(server *hyperdhcpv1beta1.Server) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      server.Name,
+			Namespace: server.Namespace,
+			Labels: map[string]string{
+				"app": server.Name,
+			},
+		},
+	}
 }
 
 func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
@@ -131,6 +268,11 @@ func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
 						{
 							Name:  server.Name,
 							Image: DHCPImage,
+							Args: []string{
+								"server",
+								"--config",
+								"/etc/dhcp/hyperdhcp.yaml",
+							},
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "dhcp",
@@ -146,6 +288,7 @@ func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
 								{
 									Name:      "dhcp-config",
 									MountPath: "/etc/dhcp",
+									ReadOnly:  true,
 								},
 								{
 									Name:      "dhcp-leases",
@@ -161,6 +304,12 @@ func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
 										Name: server.Name,
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "hyperdhcp.yaml",
+											Path: "hyperdhcp.yaml",
+										},
 									},
 								},
 							},
