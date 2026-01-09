@@ -254,7 +254,7 @@ endif
 .PHONY: gox
 gox: $(GOX) ## Download gox locally if necessary.
 $(GOX): $(LOCALBIN)
-	test -s $(GOX)/gox || GOBIN=$(LOCALBIN) go install github.com/mitchellh/gox@latest
+	test -s $(GOX)/gox || GOBIN=$(LOCALBIN) go install github.com/mitchellh/gox@v1.0.1
 
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
