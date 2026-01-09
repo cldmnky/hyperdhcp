@@ -25,6 +25,4 @@ bin/
 
 # Test database files
 *.db/
-test.db/
-test_register.db/
 
