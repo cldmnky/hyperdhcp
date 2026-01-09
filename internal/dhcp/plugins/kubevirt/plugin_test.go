@@ -34,7 +34,7 @@ func TestKubevirtHandler4(t *testing.T) {
 		ClientHWAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
 	}
 	resp := &dhcpv4.DHCPv4{}
-	// add instancee to fake client
+	// add instance to fake client
 	k.Client.KubevirtV1().VirtualMachineInstances("test").Create(context.Background(), &kubevirtv1.VirtualMachineInstance{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
