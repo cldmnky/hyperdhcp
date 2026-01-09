@@ -234,7 +234,7 @@ func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
 
 	replicas := int32(1)
 	runAsUser := int64(1000)
-	priviliged := true
+	privileged := true
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -282,7 +282,7 @@ func newDHCPDeployment(server *hyperdhcpv1beta1.Server) *appsv1.Deployment {
 							},
 							SecurityContext: &corev1.SecurityContext{
 								RunAsUser:  &runAsUser,
-								Privileged: &priviliged,
+								Privileged: &privileged,
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
