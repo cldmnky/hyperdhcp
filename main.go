@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Initilize logger
+	// Initialize logger
 	loggerConfig := zap.Config{
 		Encoding:         "json",
 		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
