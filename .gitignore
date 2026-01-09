@@ -23,3 +23,6 @@ go.work
 # Binaries
 bin/
 
+# Test database files
+*.db/
+
