@@ -1,0 +1,50 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: hyperdhcp.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Server is the Schema for the servers API
+      displayName: Server
+      kind: Server
+      name: servers.hyperdhcp.blahonga.me
+      version: v1beta1
+  description: A DHCP Server with kubevirt super powers
+  displayName: hyperdhcp
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - dhcp
+  - hypershift
+  - multus
+  - kubevirt
+  links:
+  - name: Hyperdhcp
+    url: https://hyperdhcp.domain
+  maintainers:
+  - email: magnus.bengtsson@redhat.com
+    name: Magnus Bengtsson
+  maturity: alpha
+  provider:
+    name: Magnus Bengtsson
+  version: 0.0.0

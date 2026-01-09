@@ -51,7 +51,7 @@ endif
 OPERATOR_SDK_VERSION ?= v1.33.0
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= quay.io/cldmnky/hyperdhcp:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27.1
 
@@ -66,12 +66,17 @@ endif
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
 # tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
+CONTAINER_TOOL ?= podman
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
+
+# Set some helpers for multi arch builds
+OS?=$(shell go env GOOS)
+ARCH?=$(shell go env GOARCH)
+RELEASE_IMAGE_PLATFORMS?="linux/amd64 linux/arm64"
 
 .PHONY: all
 all: build
@@ -119,21 +124,36 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	go build -o bin/manager main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+.PHONY: build-hyperdhcp-release
+build-hyperdhcp-release: manifests generate fmt vet ## Build hyperdhcp binary.
+	$(CONTAINER_TOOL) build -f Dockerfile.build -v $$(pwd)/bin:/tmp/build --platform linux/amd64 
+	$(CONTAINER_TOOL) build -f Dockerfile.build -v $$(pwd)/bin:/tmp/build --platform linux/arm64 
+
+.PHONY: build-hyperdhcp-image
+build-hyperdhcp-image:  build-hyperdhcp-release ## Build docker image with zupd.
+	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile bin/release
+
+.PHONY: multiarch-image-hyperdhcp
+multiarch-image-hyperdhcp: build-hyperdhcp-release ## Build multiarch container image with hyperdhcp.
+	$(CONTAINER_TOOL) manifest rm quay.io/cldmnky/hyperdhcp:latest || true
+	$(CONTAINER_TOOL) build --manifest ${IMG} --pull --platform linux/amd64,linux/arm64 -f Dockerfile bin && \
+	$(CONTAINER_TOOL) manifest push ${IMG} docker://$(IMG)
+
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-.PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+.PHONY: build-image
+build-image: test ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build -t ${IMG} .
 
-.PHONY: docker-push
-docker-push: ## Push docker image with the manager.
+.PHONY: push-image
+push-image: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
@@ -188,10 +208,12 @@ KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+GOX ?= $(LOCALBIN)/gox
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
 CONTROLLER_TOOLS_VERSION ?= v0.12.0
+GOX_VERSION ?= v1.0.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
@@ -229,6 +251,11 @@ else
 OPERATOR_SDK = $(shell which operator-sdk)
 endif
 endif
+
+.PHONY: gox
+gox: $(GOX) ## Download gox locally if necessary.
+$(GOX): $(LOCALBIN)
+	test -s $(GOX)/gox || GOBIN=$(LOCALBIN) go install github.com/mitchellh/gox@$(GOX_VERSION)
 
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
