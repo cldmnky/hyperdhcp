@@ -213,6 +213,7 @@ GOX ?= $(LOCALBIN)/gox
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
 CONTROLLER_TOOLS_VERSION ?= v0.12.0
+GOX_VERSION ?= v1.0.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
@@ -254,7 +255,7 @@ endif
 .PHONY: gox
 gox: $(GOX) ## Download gox locally if necessary.
 $(GOX): $(LOCALBIN)
-	test -s $(GOX)/gox || GOBIN=$(LOCALBIN) go install github.com/mitchellh/gox@latest
+	test -s $(GOX)/gox || GOBIN=$(LOCALBIN) go install github.com/mitchellh/gox@$(GOX_VERSION)
 
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
